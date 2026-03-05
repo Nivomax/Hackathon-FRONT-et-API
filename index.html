@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Poker • Classement & Séances</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true">♠</div>
+        <div class="brand__txt">
+          <div class="brand__title">Association Poker</div>
+          <div class="brand__sub">Classement & gestion de séances</div>
+        </div>
+      </div>
+
+      <div class="topbar__actions">
+        <button id="btnReset" class="btn btn--ghost" type="button" title="Réinitialiser les données (local)">Réinitialiser</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container page">
+    <!-- Boutons Ouvrir séance et Ajouter joueur -->
+    <section class="card card--action">
+      <button id="btnOpenSession" class="btn btn--primary" type="button">Ouvrir une séance</button>
+      <button id="btnAddPlayer" class="btn btn--secondary" type="button">Ajouter un joueur au classement</button>
+    </section>
+
+    <!-- Classement et Historique côte à côte -->
+    <div class="layoutTwoColumns">
+      <!-- Classement à gauche -->
+      <section class="card">
+        <div class="card__head">
+          <h1 class="h1">Classement général</h1>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table" aria-label="Classement général">
+            <thead>
+              <tr>
+                <th style="width:120px">Position</th>
+                <th style="width:180px">Total points</th>
+                <th>Joueur</th>
+              </tr>
+            </thead>
+            <tbody id="rankingBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card__foot">
+          <button id="btnSeeMore" class="btn btn--secondary" type="button">Voir plus</button>
+          <div id="rankingInfo" class="muted"></div>
+        </div>
+      </section>
+
+      <!-- Historique à droite -->
+      <section class="card">
+        <div class="card__head">
+          <h2 class="h2">Historique des séances</h2>
+        </div>
+
+        <div id="sessionsGrid" class="sessionsList" aria-label="Historique des séances"></div>
+      </section>
+    </div>
+
+    <!-- Zone formulaire séance (affichée après choix date) -->
+    <section id="liveSessionSection" class="card hidden" aria-live="polite">
+      <div class="card__head">
+        <div>
+          <h2 class="h2">Séance en cours</h2>
+          <div class="muted">
+            Date : <span id="liveSessionDateLabel"></span>
+          </div>
+        </div>
+        <div class="pill" id="liveSessionStatus">En préparation</div>
+      </div>
+
+      <div class="toolbar">
+        <button id="btnAddRow" class="btn btn--secondary" type="button">Rajouter un joueur</button>
+        <div class="spacer"></div>
+        <button id="btnCloseSession" class="btn btn--primary hidden" type="button">Clôturer la séance</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" aria-label="Formulaire de séance">
+          <thead>
+            <tr>
+              <th style="min-width:150px">Joueur</th>
+              <th style="min-width:100px">Arrivée</th>
+              <th style="min-width:100px">Élimination</th>
+              <th style="min-width:60px">LXP</th>
+              <th style="min-width:50px">Position</th>
+              <th style="min-width:70px">Points placement</th>
+              <th style="min-width:70px">Total séance</th>
+              <th style="min-width:110px">Action</th>
+            </tr>
+          </thead>
+          <tbody id="liveSessionBody"></tbody>
+        </table>
+      </div>
+
+    </section>
+  </main>
+
+
+  <!-- Modal ajouter joueur -->
+  <dialog id="addPlayerModal" class="modal">
+    <form method="dialog" class="modal__card">
+      <div class="modal__head">
+        <div>
+          <div class="modal__title">Ajouter un joueur</div>
+        </div>
+        <button class="iconBtn" value="cancel" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <label class="field">
+          <span>Prénom</span>
+          <input id="playerFirstName" type="text" placeholder="Ex: Jean" />
+        </label>
+        <label class="field">
+          <span>Nom</span>
+          <input id="playerLastName" type="text" placeholder="Ex: Dupont" />
+        </label>
+        <label class="field">
+          <span>Numéro étudiant</span>
+          <input id="playerStudentNum" type="text" placeholder="Ex: 12345" />
+        </label>
+      </div>
+
+      <div class="modal__foot">
+        <button class="btn btn--ghost" value="cancel" type="submit">Annuler</button>
+        <button id="confirmAddPlayer" class="btn btn--primary" value="ok" type="submit">Ajouter</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal choix date -->
+  <dialog id="dateModal" class="modal">
+    <form method="dialog" class="modal__card">
+      <div class="modal__head">
+        <div>
+          <div class="modal__title">Ouvrir une séance</div>
+        </div>
+        <button class="iconBtn" value="cancel" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <label class="field">
+          <span>Date</span>
+          <input id="sessionDateInput" type="date" />
+        </label>
+      </div>
+
+      <div class="modal__foot">
+        <button class="btn btn--ghost" value="cancel" type="submit">Annuler</button>
+        <button id="confirmOpenSession" class="btn btn--primary" value="ok" type="submit">Ouvrir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal détail séance -->
+  <dialog id="detailModal" class="modal">
+    <form method="dialog" class="modal__card modal__card--wide">
+      <div class="modal__head">
+        <div>
+          <div class="modal__title">Détail de séance</div>
+          <div class="muted">Lecture seule</div>
+        </div>
+        <button class="iconBtn" value="close" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="detailTop">
+          <div class="kv">
+            <div class="kv__k">Date</div>
+            <div class="kv__v" id="detailDate"></div>
+          </div>
+          <div class="kv">
+            <div class="kv__k">Participants</div>
+            <div class="kv__v" id="detailCount"></div>
+          </div>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table" aria-label="Détail de séance">
+            <thead>
+              <tr>
+                <th>Joueur</th>
+                <th style="min-width:100px">Arrivée</th>
+                <th style="min-width:100px">Élimination</th>
+                <th style="min-width:60px">LXP</th>
+                <th style="min-width:50px">Position</th>
+                <th style="min-width:70px">Placement</th>
+                <th style="min-width:70px">Total</th>
+              </tr>
+            </thead>
+            <tbody id="detailBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal__foot">
+        <button class="btn btn--primary" value="close" type="submit">Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
