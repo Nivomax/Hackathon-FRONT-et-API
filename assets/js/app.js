@@ -291,7 +291,6 @@ function openSessionDetail(sessionId) {
       <td class="points">${r.lxp ?? 0}</td>
       <td class="points">${r.position ?? "—"}</td>
       <td class="points">${r.placementPoints ?? 0}</td>
-      <td class="points">${r.totalPoints ?? 0}</td>
     `;
     detailBody.appendChild(tr);
   }
