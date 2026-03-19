@@ -1,38 +1,4 @@
 /* =========================
-   Storage helpers
-========================= */
-
-const LS_KEYS = {
-  players: "poker_players_v1",
-  sessions: "poker_sessions_v1",
-  tournaments: "poker_tournaments_v1",
-  archivedSessions: "poker_archived_sessions_v1",
-  archivedTournaments: "poker_archived_tournaments_v1",
-};
-
-function loadJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function ensureSeed() {
-  const existingPlayers = loadJSON(LS_KEYS.players, null);
-  const existingSessions = loadJSON(LS_KEYS.sessions, null);
-
-  if (!existingPlayers) saveJSON(LS_KEYS.players, window.SEED_PLAYERS ?? []);
-  if (!existingSessions) saveJSON(LS_KEYS.sessions, window.SEED_SESSIONS ?? []);
-}
-
-/* =========================
    Utils
 ========================= */
 
@@ -93,22 +59,49 @@ function todayISO() {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/**
+ * Affiche une modal de confirmation au lieu d'utiliser window.confirm()
+ * @param {string} message - Message de confirmation
+ * @returns {Promise<boolean>} - true si confirmé, false si annulé
+ */
+function showConfirmation(message) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("confirmationModal");
+    const msgEl = document.getElementById("confirmationMessage");
+    const confirmBtn = document.getElementById("confirmationConfirmBtn");
+    
+    msgEl.textContent = message;
+    
+    // Listener unique pour le bouton
+    const handleConfirm = () => {
+      confirmBtn.removeEventListener("click", handleConfirm);
+      modal.close();
+      resolve(true);
+    };
+    
+    confirmBtn.addEventListener("click", handleConfirm);
+    
+    // Si on ferme la modal sans confirmer, retourner false
+    modal.addEventListener("close", () => {
+      confirmBtn.removeEventListener("click", handleConfirm);
+      if (modal.returnValue !== "confirm") {
+        resolve(false);
+      }
+    }, { once: true });
+    
+    modal.showModal();
+  });
+}
+
 /* =========================
-   State
+   State (définies dans sync.js)
 ========================= */
 
-ensureSeed();
-
-let players = loadJSON(LS_KEYS.players, []);
-let sessions = loadJSON(LS_KEYS.sessions, []);
-let tournaments = loadJSON(LS_KEYS.tournaments, []);
-let archivedSessions = loadJSON(LS_KEYS.archivedSessions, []);
-let archivedTournaments = loadJSON(LS_KEYS.archivedTournaments, []);
+// Les variables players, sessions, tournaments, etc. sont maintenant
+// déclarées et gérées dans sync.js avec l'API
 
 let rankingExpanded = false;
 
-// Séance en cours (non persistée tant que pas clôturée)
-let liveSession = null;
 /**
  * liveSession = {
  *   id, date, createdAt,
@@ -126,6 +119,7 @@ let liveSession = null;
  *     }
  *   ]
  * }
+ * (liveSession est déclaré dans sync.js)
  */
 
 /* =========================
@@ -158,7 +152,7 @@ const btnAddRow = document.getElementById("btnAddRow");
 const btnCloseSession = document.getElementById("btnCloseSession");
 
 const liveSessionConfirmation = document.getElementById("liveSessionConfirmation");
-const btnViewSessionDetail = document.getElementById("btnViewSessionDetail");
+
 
 const tournamentConfirmation = document.getElementById("tournamentConfirmation");
 
@@ -176,7 +170,6 @@ const tournamentDate = document.getElementById("tournamentDate");
 const confirmAddTournament = document.getElementById("confirmAddTournament");
 const tournamentsGrid = document.getElementById("tournamentsGrid");
 
-const btnReset = document.getElementById("btnReset");
 const btnViewArchives = document.getElementById("btnViewArchives");
 const archivesModal = document.getElementById("archivesModal");
 const archivesContent = document.getElementById("archivesContent");
@@ -191,9 +184,11 @@ function computePlacementPointsByPlayer() {
   for (const s of sessions) {
     for (const r of s.rows) {
       const cur = map.get(r.playerName) ?? 0;
-      map.set(r.playerName, cur + (r.placementPoints ?? 0));
+      const pts = r.placementPoints ? parseInt(r.placementPoints, 10) : 0;
+      map.set(r.playerName, cur + pts);
     }
   }
+  
   // ajouter 250 points par victoire en tournoi
   for (const t of tournaments) {
     if (t.winner) {
@@ -201,9 +196,10 @@ function computePlacementPointsByPlayer() {
       map.set(t.winner, cur + 250);
     }
   }
+  
   // inclure membres qui n'ont jamais joué => 0 (optionnel)
   for (const p of players) {
-    if (!map.has(p)) map.set(p, 0);
+    if (!map.has(p.name)) map.set(p.name, 0);
   }
   return map;
 }
@@ -214,12 +210,13 @@ function computeLXPPointsByPlayer() {
   for (const s of sessions) {
     for (const r of s.rows) {
       const cur = map.get(r.playerName) ?? 0;
-      map.set(r.playerName, cur + (r.lxp ?? 0));
+      const lxp = r.lxp ? parseInt(r.lxp, 10) : 0;
+      map.set(r.playerName, cur + lxp);
     }
   }
   // inclure membres qui n'ont jamais joué => 0 (optionnel)
   for (const p of players) {
-    if (!map.has(p)) map.set(p, 0);
+    if (!map.has(p.name)) map.set(p.name, 0);
   }
   return map;
 }
@@ -286,7 +283,7 @@ function renderSessionsGrid() {
     const div = document.createElement("button");
     div.type = "button";
     div.className = "sessionCard";
-    const count = s.rows?.length ?? 0;
+    const count = s.nbParticipants ?? s.rows?.length ?? 0;
 
     div.innerHTML = `
       <div class="sessionCard__date">${formatDateISOToFR(s.date)}</div>
@@ -299,9 +296,10 @@ function renderSessionsGrid() {
     btnDelete.className = "sessionCard__delete";
     btnDelete.textContent = "✕";
     btnDelete.title = "Supprimer cette séance";
-    btnDelete.addEventListener("click", (e) => {
+    btnDelete.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (confirm("Êtes-vous sûr de vouloir supprimer cette séance ?")) {
+      const confirmed = await showConfirmation("Êtes-vous sûr de vouloir supprimer cette séance ?");
+      if (confirmed) {
         deleteSession(s.id);
       }
     });
@@ -326,11 +324,20 @@ function openSessionDetail(sessionId) {
   detailBody.innerHTML = "";
   for (const r of rows) {
     const tr = document.createElement("tr");
+    
+    // Pour le gagnant (position 1), LXP = durée jusqu'à maintenant
+    let lxpDisplay = r.lxp ?? 0;
+    if (r.position === 1 && r.arrivedAt != null && !r.eliminatedAt) {
+      const diffMs = Date.now() - r.arrivedAt;
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      lxpDisplay = Math.max(1, hours);
+    }
+    
     tr.innerHTML = `
       <td><strong>${escapeHTML(r.playerName)}</strong> ${r.winner ? `<span class="rowTag tag--winner">Gagnant</span>` : ""}</td>
       <td>${formatTime(r.arrivedAt)}</td>
       <td>${r.eliminatedAt ? formatTime(r.eliminatedAt) : "—"}</td>
-      <td class="points">${r.lxp ?? 0}</td>
+      <td class="points">${lxpDisplay}</td>
       <td class="points">${r.position ?? "—"}</td>
       <td class="points">${r.placementPoints ?? 0}</td>
     `;
@@ -384,9 +391,10 @@ function renderTournamentsGrid() {
     btnDelete.className = "sessionCard__delete";
     btnDelete.textContent = "✕";
     btnDelete.title = "Supprimer ce tournoi";
-    btnDelete.addEventListener("click", (e) => {
+    btnDelete.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (confirm("Êtes-vous sûr de vouloir supprimer ce tournoi ?")) {
+      const confirmed = await showConfirmation("Êtes-vous sûr de vouloir supprimer ce tournoi ?");
+      if (confirmed) {
         deleteTournament(t.id);
       }
     });
@@ -409,92 +417,121 @@ function addTournamentWinner(winner, date) {
   }
 
   // vérifier que le gagnant existe
-  if (!players.includes(winner)) {
+  const winnerPlayer = players.find(p => p.name === winner);
+  if (!winnerPlayer) {
     alert("Le gagnant n'existe pas.");
     return;
   }
 
-  const tournament = {
-    id: uid("tourn"),
-    winner,
-    date,
-    createdAt: Date.now(),
-  };
+  // Créer le tournoi via l'API
+  createTournamentAPI(`Tournoi ${formatDateISOToFR(date)}`, winnerPlayer.id, date).then(result => {
+    if (result) {
+      console.log('✅ Tournoi créé:', result.id);
+      
+      // show confirmation
+      tournamentConfirmation.showModal();
+      setTimeout(() => {
+        tournamentConfirmation.close();
+      }, 2500);
 
-  tournaments.push(tournament);
-  saveJSON(LS_KEYS.tournaments, tournaments);
-
-  // show confirmation
-  tournamentConfirmation.classList.remove("hidden");
-  setTimeout(() => {
-    tournamentConfirmation.classList.add("hidden");
-  }, 3000);
-
-  renderTournamentsGrid();
-  renderRanking();
+      // Rafraîchir les données
+      initializeFromAPI().then(() => {
+        renderTournamentsGrid();
+        renderRanking();
+      });
+    }
+  });
 }
 
 function deleteSession(sessionId) {
-  const session = sessions.find(s => s.id === sessionId);
-  if (session) {
-    archivedSessions.push(session);
-    saveJSON(LS_KEYS.archivedSessions, archivedSessions);
-  }
-
-  sessions = sessions.filter(s => s.id !== sessionId);
-  saveJSON(LS_KEYS.sessions, sessions);
-
-  if (liveSession && liveSession.id === sessionId) {
-    liveSession = null;
-    liveSessionSection.classList.add("hidden");
-  }
-
-  renderSessionsGrid();
-  renderRanking();
+  // Archiver la séance en BD au lieu de la supprimer
+  PokerAPI.archiveSession(sessionId).then(result => {
+    if (result.success) {
+      console.log('✅ Séance archivée');
+      
+      // Retirer de la liste active
+      const session = sessions.find(s => s.id === sessionId);
+      if (session) {
+        archivedSessions.push(session);
+      }
+      sessions = sessions.filter(s => s.id !== sessionId);
+      
+      if (liveSession && liveSession.id === sessionId) {
+        liveSession = null;
+        liveSessionSection.classList.add("hidden");
+      }
+      
+      // Rafraîchir l'affichage
+      renderSessionsGrid();
+      renderRanking();  // ✅ Recalculer le ranking après suppression
+    }
+  });
 }
 
 function deleteTournament(tournamentId) {
-  const tournament = tournaments.find(t => t.id === tournamentId);
-  if (tournament) {
-    archivedTournaments.push(tournament);
-    saveJSON(LS_KEYS.archivedTournaments, archivedTournaments);
-  }
-
-  tournaments = tournaments.filter(t => t.id !== tournamentId);
-  saveJSON(LS_KEYS.tournaments, tournaments);
-
-  renderTournamentsGrid();
-  renderRanking();
+  // Archiver le tournoi en BD au lieu de le supprimer
+  PokerAPI.archiveTournament(tournamentId).then(result => {
+    if (result.success) {
+      console.log('✅ Tournoi archivé');
+      
+      // Retirer de la liste active
+      const tournament = tournaments.find(t => t.id === tournamentId);
+      if (tournament) {
+        archivedTournaments.push(tournament);
+      }
+      tournaments = tournaments.filter(t => t.id !== tournamentId);
+      
+      // Rafraîchir l'affichage
+      renderTournamentsGrid();
+      renderRanking();
+    }
+  });
 }
 
 function restoreSession(sessionId) {
-  const session = archivedSessions.find(s => s.id === sessionId);
-  if (session) {
-    sessions.push(session);
-    saveJSON(LS_KEYS.sessions, sessions);
-    
-    archivedSessions = archivedSessions.filter(s => s.id !== sessionId);
-    saveJSON(LS_KEYS.archivedSessions, archivedSessions);
-    
-    renderSessionsGrid();
-    renderArchives();
-    renderRanking();
-  }
+  // Restaurer la séance en BD (mettre isArchived = 0)
+  PokerAPI.restoreSession(sessionId).then(result => {
+    if (result.success) {
+      console.log('✅ Séance restaurée');
+      
+      // Déplacer de archived vers sessions
+      const session = archivedSessions.find(s => s.id === sessionId);
+      if (session) {
+        sessions.push(session);
+        archivedSessions = archivedSessions.filter(s => s.id !== sessionId);
+      }
+      
+      // Rafraîchir l'affichage
+      renderSessionsGrid();
+      renderArchives();
+      renderRanking();
+    }
+  }).catch(error => {
+    console.error('❌ Erreur restauration:', error);
+  });
 }
 
 function restoreTournament(tournamentId) {
-  const tournament = archivedTournaments.find(t => t.id === tournamentId);
-  if (tournament) {
-    tournaments.push(tournament);
-    saveJSON(LS_KEYS.tournaments, tournaments);
-    
-    archivedTournaments = archivedTournaments.filter(t => t.id !== tournamentId);
-    saveJSON(LS_KEYS.archivedTournaments, archivedTournaments);
-    
-    renderTournamentsGrid();
-    renderArchives();
-    renderRanking();
-  }
+  // Restaurer le tournoi en BD (mettre isArchived = 0)
+  PokerAPI.restoreTournament(tournamentId).then(result => {
+    if (result.success) {
+      console.log('✅ Tournoi restauré');
+      
+      // Déplacer de archived vers tournaments
+      const tournament = archivedTournaments.find(t => t.id === tournamentId);
+      if (tournament) {
+        tournaments.push(tournament);
+        archivedTournaments = archivedTournaments.filter(t => t.id !== tournamentId);
+      }
+      
+      // Rafraîchir l'affichage
+      renderTournamentsGrid();
+      renderArchives();
+      renderRanking();
+    }
+  }).catch(error => {
+    console.error('❌ Erreur restauration:', error);
+  });
 }
 
 function renderArchives() {
@@ -563,8 +600,9 @@ function renderArchives() {
       btn.className = "btn btn--secondary";
       btn.textContent = "Restaurer";
       btn.style.whiteSpace = "nowrap";
-      btn.addEventListener("click", () => {
-        if (confirm("Restaurer cette séance ?")) {
+      btn.addEventListener("click", async () => {
+        const confirmed = await showConfirmation("Restaurer cette séance ?");
+        if (confirmed) {
           restoreSession(s.id);
         }
       });
@@ -647,6 +685,14 @@ function startLiveSession(dateISO) {
   liveSessionDateLabel.textContent = formatDateISOToFR(dateISO);
   liveSessionSection.classList.remove("hidden");
 
+  // Créer la séance en BD (sans attendre la réponse pour l'UX)
+  createSessionAPI(dateISO).then(result => {
+    if (result) {
+      liveSession.id = result.id; // Utiliser l'ID de la BD
+      console.log('✅ Séance créée en BD avec ID:', result.id);
+    }
+  });
+
   renderLiveSession();
 }
 
@@ -678,12 +724,9 @@ function validateRow(rowId, playerName) {
   const already = liveSession.rows.some(r => r.rowId !== rowId && r.playerName === name && r.status !== "draft");
   if (already) return alert("Ce membre est déjà présent dans la séance.");
 
-  // si nouveau membre (pas dans la liste globale) => on l'ajoute
-  if (!players.includes(name)) {
-    players.push(name);
-    players.sort((a, b) => a.localeCompare(b, "fr"));
-    saveJSON(LS_KEYS.players, players);
-  }
+  // Chercher le joueur dans la liste (qui vient de l'API)
+  const player = players.find(p => p.name === name);
+  if (!player) return alert("Ce membre n'existe pas.");
 
   const row = liveSession.rows.find(r => r.rowId === rowId);
   if (!row) return;
@@ -691,6 +734,15 @@ function validateRow(rowId, playerName) {
   row.playerName = name;
   row.status = "active";
   row.arrivedAt = Date.now();
+  row.playerId = player.id; // Stocker l'ID du joueur pour plus tard
+
+  // Ajouter le joueur à la séance en BD (async)
+  addPlayerToSessionAPI(liveSession.id, player.id, row.arrivedAt).then(result => {
+    if (result && result.id) {
+      row.participationId = result.id; // Stocker le participationId pour les mises à jour futures
+      console.log('✅ Joueur ajouté à la séance, participationId:', result.id);
+    }
+  });
 
   recalcLiveSession();
   renderLiveSession();
@@ -723,8 +775,8 @@ function markWinner(rowId) {
   if (!row || row.status !== "active") return;
 
   row.status = "winner";
-  // gagnant : pas éliminé
-  row.eliminatedAt = null;
+  // Capturer l'heure de fin du jeu (pour calculer LXP jusqu'à maintenant)
+  row.eliminatedAt = Date.now();
 
   recalcLiveSession(true);
   renderLiveSession();
@@ -761,42 +813,46 @@ function closeSession() {
     return alert("La séance n'est pas terminée : il faut un gagnant et tous les autres éliminés.");
   }
 
-  // Construire séance persistée
-  const persisted = {
-    id: liveSession.id,
-    date: liveSession.date,
-    createdAt: liveSession.createdAt,
-    rows: liveSession.rows.map(r => ({
-      playerName: r.playerName,
-      arrivedAt: r.arrivedAt,
-      eliminatedAt: r.eliminatedAt,
-      lxp: r.lxp,
-      position: r.position,
-      placementPoints: r.placementPoints,
-      totalPoints: r.totalPoints,
-      winner: r.status === "winner",
-    })),
-  };
+  // Sauvegarder les résultats en BD
+  const updatePromises = [];
+  for (const r of liveSession.rows) {
+    if (r.participationId && typeof r.position === "number") {
+      updatePromises.push(
+        updateParticipationAPI(r.participationId, r.eliminatedAt, r.position, r.placementPoints)
+      );
+    }
+  }
 
-  const closedSessionId = liveSession.id;
-  sessions.push(persisted);
-  saveJSON(LS_KEYS.sessions, sessions);
+  // Attendre que toutes les mises à jour soient faites
+  Promise.all(updatePromises).then(() => {
+    // Clôturer la séance
+    return closeSessionAPI(liveSession.id);
+  }).then(result => {
+    if (result.success) {
+      console.log('✅ Séance clôturée avec succès');
+      
+      // Reset live
+      const closedSessionId = liveSession.id;
+      liveSession = null;
+      liveSessionSection.classList.add("hidden");
+      liveSessionBody.innerHTML = "";
 
-  // reset live
-  liveSession = null;
-  liveSessionSection.classList.add("hidden");
-  liveSessionBody.innerHTML = "";
+      // show confirmation
+      liveSessionConfirmation.showModal();
+      setTimeout(() => {
+        liveSessionConfirmation.close();
+      }, 2500);
 
-  // show confirmation
-  liveSessionConfirmation.classList.remove("hidden");
-  btnViewSessionDetail.onclick = () => {
-    liveSessionConfirmation.classList.add("hidden");
-    openSessionDetail(closedSessionId);
-  };
-
-  // refresh UI
-  renderSessionsGrid();
-  renderRanking();
+      // Rafraîchir les données depuis l'API
+      initializeFromAPI().then(() => {
+        renderSessionsGrid();
+        renderRanking();
+      });
+    }
+  }).catch(error => {
+    console.error('❌ Erreur lors de la clôture:', error);
+    alert('Erreur lors de la clôture de la séance.');
+  });
 }
 
 function recalcLiveSession(forceFinalize = false) {
@@ -913,7 +969,7 @@ function renderLiveSession() {
     // colonne membre
     let playerCellHTML = "";
     if (r.status === "draft") {
-      const playerOptions = players.map(p => `<option value="${escapeHTMLAttr(p)}">${escapeHTML(p)}</option>`).join("");
+      const playerOptions = players.map(p => `<option value="${escapeHTMLAttr(p.name)}">${escapeHTML(p.name)}</option>`).join("");
       playerCellHTML = `
         <div class="field">
           <select data-role="playerSelect" data-row="${r.rowId}">
@@ -1012,7 +1068,7 @@ btnAddPlayer.addEventListener("click", () => {
   addPlayerModal.showModal();
 });
 
-confirmAddPlayer.addEventListener("click", (e) => {
+confirmAddPlayer.addEventListener("click", async (e) => {
   e.preventDefault();
   
   const firstName = (playerFirstName.value ?? "").trim();
@@ -1026,31 +1082,39 @@ confirmAddPlayer.addEventListener("click", (e) => {
   const fullName = `${firstName} ${lastName}`;
   
   // vérifier que le membre n'existe pas déjà
-  if (players.includes(fullName)) {
+  if (players.some(p => p.name === fullName)) {
     alert("Ce membre existe déjà.");
     return;
   }
   
-  // ajouter le membre
-  players.push(fullName);
-  saveJSON(LS_KEYS.players, players);
+  // Ajouter le membre via l'API
+  const result = await createPlayerAPI(fullName, null);
+  
+  if (!result) {
+    alert("Erreur lors de l'ajout du membre.");
+    return;
+  }
   
   // Fermer le modal
   addPlayerModal.close();
   
   // show confirmation
-  playerConfirmation.classList.remove("hidden");
+  playerConfirmation.showModal();
   setTimeout(() => {
-    playerConfirmation.classList.add("hidden");
-  }, 3000);
+    playerConfirmation.close();
+  }, 2500);
   
   // rafraîchir l'UI (classement)
   renderRanking();
+  
+  // Clear inputs
+  playerFirstName.value = "";
+  playerLastName.value = "";
 });
 
 btnWinnerTournament.addEventListener("click", () => {
   // remplir les listes de sélection
-  const options = players.map(p => `<option value="${escapeHTMLAttr(p)}">${escapeHTML(p)}</option>`).join("");
+  const options = players.map(p => `<option value="${escapeHTMLAttr(p.name)}">${escapeHTML(p.name)}</option>`).join("");
   tournamentWinner.innerHTML = `<option value="">-- Sélectionner un membre --</option>${options}`;
   
   tournamentWinner.value = "";
@@ -1070,26 +1134,6 @@ tournamentModal.addEventListener("close", () => {
 btnViewArchives.addEventListener("click", () => {
   renderArchives();
   archivesModal.showModal();
-});
-
-btnReset.addEventListener("click", () => {
-  const ok = confirm("Réinitialiser les données locales (membres + séances + tournois) ?");
-  if (!ok) return;
-  localStorage.removeItem(LS_KEYS.players);
-  localStorage.removeItem(LS_KEYS.sessions);
-  localStorage.removeItem(LS_KEYS.tournaments);
-  localStorage.removeItem(LS_KEYS.archivedSessions);
-  localStorage.removeItem(LS_KEYS.archivedTournaments);
-  ensureSeed();
-  players = loadJSON(LS_KEYS.players, []);
-  sessions = loadJSON(LS_KEYS.sessions, []);
-  tournaments = loadJSON(LS_KEYS.tournaments, []);
-  archivedSessions = loadJSON(LS_KEYS.archivedSessions, []);
-  archivedTournaments = loadJSON(LS_KEYS.archivedTournaments, []);
-  rankingExpanded = false;
-  liveSession = null;
-  liveSessionSection.classList.add("hidden");
-  renderAll();
 });
 
 /* =========================

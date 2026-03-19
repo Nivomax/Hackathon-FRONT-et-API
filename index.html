@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Poker • Classement & Séances</title>
   <link rel="stylesheet" href="./assets/style.css" />
+  <script src="./assets/js/api.js"></script>
 </head>
 
 <body>
@@ -19,7 +20,6 @@
       </div>
 
       <div class="topbar__actions">
-        <button id="btnReset" class="btn btn--ghost" type="button" title="Réinitialiser les données (local)">Réinitialiser</button>
       </div>
     </div>
   </header>
@@ -70,21 +70,30 @@
 
     </section>
 
-    <!-- Confirmation après clôture de séance -->
-    <div id="liveSessionConfirmation" class="card hidden" style="display: flex; align-items: center; justify-content: space-between; padding: 18px; gap: 16px; background-color: #dcfce7;">
-      <span>La séance à bien été enregistrée</span>
-      <button id="btnViewSessionDetail" class="btn btn--primary" type="button">Voir le détail de la séance</button>
-    </div>
+    <!-- Modal de confirmation d'ajout -->
+    <dialog id="liveSessionConfirmation" class="modal" style="width: 30em;">
+      <form method="dialog" class="modal__card" style="background-color: #dcfce7; border: 2px solid #bbf7d0;">
+        <div class="modal__body">
+          <p style="margin: 0; text-align: center;">La séance à bien été enregistrée</p>
+        </div>
+      </form>
+    </dialog>
 
-    <!-- Confirmation après ajout gagnant tournoi -->
-    <div id="tournamentConfirmation" class="card hidden" style="display: flex; align-items: center; justify-content: flex-start; padding: 18px; gap: 16px; background-color: #dcfce7;">
-      <span>Gagnant du tournoi enregistré</span>
-    </div>
+    <dialog id="tournamentConfirmation" class="modal" style="width: 30em;">
+      <form method="dialog" class="modal__card" style="background-color: #dcfce7; border: 2px solid #bbf7d0;">
+        <div class="modal__body">
+          <p style="margin: 0; text-align: center;">Gagnant du tournoi enregistré</p>
+        </div>
+      </form>
+    </dialog>
 
-    <!-- Confirmation après ajout d'un membre -->
-    <div id="playerConfirmation" class="card hidden" style="display: flex; align-items: center; justify-content: flex-start; padding: 18px; gap: 16px; background-color: #dcfce7;">
-      <span>Nouveau membre ajouté</span>
-    </div>
+    <dialog id="playerConfirmation" class="modal" style="width: 30em;">
+      <form method="dialog" class="modal__card" style="background-color: #dcfce7; border: 2px solid #bbf7d0;">
+        <div class="modal__body">
+          <p style="margin: 0; text-align: center;">Nouveau membre ajouté</p>
+        </div>
+      </form>
+    </dialog>
 
     <!-- Classement et Historique côte à côte -->
     <div class="layoutTwoColumns">
@@ -273,8 +282,31 @@
       </div>
     </form>
   </dialog>
+  <!-- Modal de confirmation générique -->
+  <dialog id="confirmationModal" class="modal" style="width: 30em;">
+    <form method="dialog" class="modal__card">
+      <div class="modal__body">
+        <p id="confirmationMessage" style="margin: 0;"></p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--secondary" value="cancel" onclick="document.getElementById('confirmationModal').close()">Annuler</button>
+        <button type="button" class="btn btn--primary" id="confirmationConfirmBtn" value="confirm">Confirmer</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="./assets/js/sync.js"></script>
 
-  <script src="./assets/js/data.js"></script>
   <script src="./assets/js/app.js"></script>
+  <script>
+    // Au chargement de la page, initialiser les données depuis l'API
+    window.addEventListener('DOMContentLoaded', async () => {
+      console.log('🚀 Application en cours de chargement...');
+      await initializeFromAPI();
+      console.log('✅ Données chargées, rendu initial en cours...');
+      renderRanking();
+      renderSessionsGrid();
+      renderTournamentsGrid();
+    });
+  </script>
 </body>
 </html>
