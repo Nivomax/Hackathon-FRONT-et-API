@@ -561,9 +561,13 @@ function renderLiveSession() {
     // colonne joueur
     let playerCellHTML = "";
     if (r.status === "draft") {
+      const playerOptions = players.map(p => `<option value="${escapeHTMLAttr(p)}">${escapeHTML(p)}</option>`).join("");
       playerCellHTML = `
         <div class="field">
-          <input type="text" data-role="playerInput" data-row="${r.rowId}" placeholder="Nom du joueur..." list="playersList" />
+          <select data-role="playerSelect" data-row="${r.rowId}">
+            <option value="">-- Sélectionner un joueur --</option>
+            ${playerOptions}
+          </select>
         </div>
       `;
     } else {
@@ -603,7 +607,7 @@ function renderLiveSession() {
   }
 
   // datalist pour autocomplete
-  ensurePlayersDatalist();
+  // (remove: non nécessaire avec dropdown exclusif)
 
   // bind actions (délégation)
   liveSessionBody.querySelectorAll("[data-action]").forEach(btn => {
@@ -611,8 +615,8 @@ function renderLiveSession() {
       const rowId = btn.getAttribute("data-row");
       const action = btn.getAttribute("data-action");
       if (action === "validate") {
-        const input = liveSessionBody.querySelector(`[data-role="playerInput"][data-row="${rowId}"]`);
-        validateRow(rowId, input?.value ?? "");
+        const select = liveSessionBody.querySelector(`[data-role="playerSelect"][data-row="${rowId}"]`);
+        validateRow(rowId, select?.value ?? "");
       }
       if (action === "eliminate") eliminateRow(rowId);
       if (action === "winner") markWinner(rowId);
@@ -620,16 +624,6 @@ function renderLiveSession() {
   });
 
   updateLiveSessionStatus();
-}
-
-function ensurePlayersDatalist() {
-  let dl = document.getElementById("playersList");
-  if (!dl) {
-    dl = document.createElement("datalist");
-    dl.id = "playersList";
-    document.body.appendChild(dl);
-  }
-  dl.innerHTML = players.map(p => `<option value="${escapeHTMLAttr(p)}"></option>`).join("");
 }
 
 /* =========================
@@ -689,9 +683,8 @@ addPlayerModal.addEventListener("close", () => {
   players.push(fullName);
   saveJSON(LS_KEYS.players, players);
   
-  // rafraîchir l'UI (classement + datalist)
+  // rafraîchir l'UI (classement)
   renderRanking();
-  ensurePlayersDatalist();
 });
 
 btnReset.addEventListener("click", () => {
@@ -734,7 +727,6 @@ function escapeHTMLAttr(str) {
 function renderAll() {
   renderRanking();
   renderSessionsGrid();
-  ensurePlayersDatalist();
 }
 
 renderAll();
