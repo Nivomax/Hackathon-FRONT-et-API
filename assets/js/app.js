@@ -159,6 +159,8 @@ const btnCloseSession = document.getElementById("btnCloseSession");
 const liveSessionConfirmation = document.getElementById("liveSessionConfirmation");
 const btnViewSessionDetail = document.getElementById("btnViewSessionDetail");
 
+const tournamentConfirmation = document.getElementById("tournamentConfirmation");
+
 const detailModal = document.getElementById("detailModal");
 const detailDate = document.getElementById("detailDate");
 const detailCount = document.getElementById("detailCount");
@@ -418,6 +420,12 @@ function addTournamentWinner(winner, date) {
 
   tournaments.push(tournament);
   saveJSON(LS_KEYS.tournaments, tournaments);
+
+  // show confirmation
+  tournamentConfirmation.classList.remove("hidden");
+  setTimeout(() => {
+    tournamentConfirmation.classList.add("hidden");
+  }, 3000);
 
   renderTournamentsGrid();
   renderRanking();

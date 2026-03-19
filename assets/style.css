@@ -134,9 +134,12 @@ body{
 
 .tableWrap{
   overflow:auto;
-  border-top:1px solid var(--line);
-  border-bottom:1px solid var(--line);
+border-width: 1px 1px 0 1px;
+border-style: solid;
+border-color: var(--line);   
+border-radius: 16px;
 }
+
 .table{
   width:100%;
   border-collapse:collapse;
