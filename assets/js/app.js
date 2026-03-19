@@ -744,15 +744,14 @@ btnAddPlayer.addEventListener("click", () => {
   addPlayerModal.showModal();
 });
 
-addPlayerModal.addEventListener("close", () => {
-  if (addPlayerModal.returnValue !== "ok") return;
+confirmAddPlayer.addEventListener("click", (e) => {
+  e.preventDefault();
   
   const firstName = (playerFirstName.value ?? "").trim();
   const lastName = (playerLastName.value ?? "").trim();
   
   if (!firstName || !lastName) {
     alert("Prénom et nom sont obligatoires.");
-    addPlayerModal.showModal(); // rouvrir pour corriger
     return;
   }
   
@@ -761,13 +760,15 @@ addPlayerModal.addEventListener("close", () => {
   // vérifier que le joueur n'existe pas déjà
   if (players.includes(fullName)) {
     alert("Ce joueur existe déjà.");
-    addPlayerModal.showModal();
     return;
   }
   
   // ajouter le joueur
   players.push(fullName);
   saveJSON(LS_KEYS.players, players);
+  
+  // Fermer le modal
+  addPlayerModal.close();
   
   // rafraîchir l'UI (classement)
   renderRanking();
