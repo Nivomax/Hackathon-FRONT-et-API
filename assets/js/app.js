@@ -294,8 +294,8 @@ function openSessionDetail(sessionId) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${escapeHTML(r.playerName)}</strong> ${r.winner ? `<span class="rowTag tag--winner">Gagnant</span>` : ""}</td>
-      <td>${formatDateTime(r.arrivedAt)}</td>
-      <td>${r.eliminatedAt ? formatDateTime(r.eliminatedAt) : "—"}</td>
+      <td>${formatTime(r.arrivedAt)}</td>
+      <td>${r.eliminatedAt ? formatTime(r.eliminatedAt) : "—"}</td>
       <td class="points">${r.lxp ?? 0}</td>
       <td class="points">${r.position ?? "—"}</td>
       <td class="points">${r.placementPoints ?? 0}</td>
@@ -672,8 +672,8 @@ function renderLiveSession() {
 
     tr.innerHTML = `
       <td>${playerCellHTML}</td>
-      <td>${r.arrivedAt ? formatDateTime(r.arrivedAt) : "—"}</td>
-      <td>${r.eliminatedAt ? formatDateTime(r.eliminatedAt) : "—"}</td>
+      <td>${r.arrivedAt ? formatTime(r.arrivedAt) : "—"}</td>
+      <td>${r.eliminatedAt ? formatTime(r.eliminatedAt) : "—"}</td>
       <td class="points">${r.lxp ?? 0}</td>
       <td class="points">${r.position ?? "—"}</td>
       <td class="points">${r.placementPoints ?? 0}</td>
