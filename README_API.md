@@ -4,8 +4,7 @@
 
 - **Base de données:** 5 tables créées et validées ✅
 - **API REST:** 6 endpoints PHP créés ✅
-- **Client API:** `api.js` chargé et prêt ✅
-- **Synchronisation:** `sync.js` gère la synchro API ↔ Frontend ✅
+- **Frontend JS:** `app.js` (API + synchro + UI) ✅
 
 ---
 
@@ -70,14 +69,10 @@ if (result.success) {
 ```
 Frontend (app.js)
     ↓
-  api.js
-    ↓
-jQuery endpoint (ex: /api/players.php)
+Point d'entree unique (/api/index.php?endpoint=...)
     ↓
 MySQL BD
 ```
-
-**sync.js** = passerelle entre app.js et api.js
 
 ---
 
@@ -115,23 +110,31 @@ console.log(ranking);
 
 ## 📊 Endpoints API disponibles
 
-| Endpoint | Méthode | Fonction |
-|----------|---------|----------|
-| `/api/players.php` | GET | Récupérer tous les joueurs |
-| `/api/players.php` | POST | Créer un joueur |
-| `/api/sessions.php` | GET | Récupérer les séances |
-| `/api/sessions.php?action=detail&id=X` | GET | Détails d'une séance |
-| `/api/sessions.php` | POST | Créer une séance |
-| `/api/sessions.php` | PUT | Modifier le status d'une séance |
-| `/api/session_participations.php` | GET | Participations d'une séance |
-| `/api/session_participations.php` | POST | Ajouter joueur à séance |
-| `/api/session_participations.php` | PUT | Mettre à jour participation |
-| `/api/tournaments.php` | GET | Récupérer les tournois |
-| `/api/tournaments.php` | POST | Créer un tournoi |
-| `/api/ranking.php?action=general` | GET | Classement général |
-| `/api/ranking.php?action=player&id=X` | GET | Stats d'un joueur |
-| `/api/users.php?action=register` | POST | Créer un compte |
-| `/api/users.php?action=login` | POST | Connexion |
+### Nouveau format (recommande)
+
+Point d'entree unique:
+
+`/api/index.php?endpoint=...`
+
+| Endpoint unique | Methode | Fonction |
+|-----------------|---------|----------|
+| `/api/index.php?endpoint=players&action=all` | GET | Recuperer tous les joueurs |
+| `/api/index.php?endpoint=players` | POST | Creer un joueur |
+| `/api/index.php?endpoint=sessions&action=all` | GET | Recuperer les seances |
+| `/api/index.php?endpoint=sessions&action=detail&id=X` | GET | Details d'une seance |
+| `/api/index.php?endpoint=sessions` | POST | Creer une seance |
+| `/api/index.php?endpoint=sessions` | PUT | Modifier le status/isArchived d'une seance |
+| `/api/index.php?endpoint=session_participations` | GET/POST/PUT | Participations |
+| `/api/index.php?endpoint=tournaments` | GET/POST/PUT/DELETE | Tournois |
+| `/api/index.php?endpoint=ranking&action=general` | GET | Classement general |
+| `/api/index.php?endpoint=ranking&action=player&id=X` | GET | Stats d'un joueur |
+| `/api/index.php?endpoint=users&action=register` | POST | Creer un compte |
+| `/api/index.php?endpoint=users&action=login` | POST | Connexion |
+
+Architecture backend actuelle:
+
+- API metier: `api/index.php`
+- Configuration DB/CORS: `api/config.php`
 
 ---
 

@@ -1,4 +1,430 @@
 /* =========================
+   API + Data Synchronization
+========================= */
+
+const API_BASE = 'http://localhost/form%20poker/api/index.php';
+
+function buildApiUrl(endpoint, params = {}) {
+  const url = new URL(API_BASE);
+  url.searchParams.set('endpoint', endpoint);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  return url.toString();
+}
+
+class PokerAPI {
+  static async getAllPlayers() {
+    try {
+      const response = await fetch(buildApiUrl('players', { action: 'all' }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getAllPlayers:', error);
+      return [];
+    }
+  }
+
+  static async createPlayer(name, studentNum = null) {
+    try {
+      const response = await fetch(buildApiUrl('players'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, studentNum })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur createPlayer:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async getAllSessions(filter = 'all') {
+    try {
+      const action = filter === 'archived' ? 'archived' : 'all';
+      const response = await fetch(buildApiUrl('sessions', { action }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getAllSessions:', error);
+      return [];
+    }
+  }
+
+  static async createSession(date, status = 'created') {
+    try {
+      const response = await fetch(buildApiUrl('sessions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, status })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur createSession:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async updateSessionStatus(sessionId, status) {
+    try {
+      const response = await fetch(buildApiUrl('sessions'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionId, status })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur updateSessionStatus:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async archiveSession(sessionId) {
+    try {
+      const response = await fetch(buildApiUrl('sessions'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionId })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur archiveSession:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async restoreSession(sessionId) {
+    try {
+      const response = await fetch(buildApiUrl('sessions'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionId, isArchived: 0 })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur restoreSession:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async getAllParticipations() {
+    try {
+      const response = await fetch(buildApiUrl('session_participations', { action: 'all' }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getAllParticipations:', error);
+      return [];
+    }
+  }
+
+  static async addPlayerToSession(sessionId, playerId, arrivedAt = null) {
+    try {
+      const response = await fetch(buildApiUrl('session_participations'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, player_id: playerId, arrivedAt })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur addPlayerToSession:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async updateParticipation(participationId, eliminatedAt = null, position = null, placementPoints = null) {
+    try {
+      const response = await fetch(buildApiUrl('session_participations'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: participationId,
+          eliminateAt: eliminatedAt,
+          position,
+          placementPoints
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur updateParticipation:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async getAllTournaments(filter = 'all') {
+    try {
+      const action = filter === 'archived' ? 'archived' : 'all';
+      const response = await fetch(buildApiUrl('tournaments', { action }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getAllTournaments:', error);
+      return [];
+    }
+  }
+
+  static async createTournament(name, winnerId, date = null) {
+    try {
+      const response = await fetch(buildApiUrl('tournaments'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, winner_id: winnerId, date })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur createTournament:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async archiveTournament(tournamentId) {
+    try {
+      const response = await fetch(buildApiUrl('tournaments'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournamentId })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur archiveTournament:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async restoreTournament(tournamentId) {
+    try {
+      const response = await fetch(buildApiUrl('tournaments'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournamentId, isArchived: 0 })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur restoreTournament:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async getRanking() {
+    try {
+      const response = await fetch(buildApiUrl('ranking', { action: 'general' }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getRanking:', error);
+      return [];
+    }
+  }
+}
+
+window.PokerAPI = PokerAPI;
+
+let players = [];
+let sessions = [];
+let tournaments = [];
+let archivedSessions = [];
+let archivedTournaments = [];
+let liveSession = null;
+
+function toTimestampMs(value) {
+  if (typeof value === 'number' && value > 0) return value;
+  if (typeof value === 'string' && value) {
+    if (/^\d+$/.test(value)) return parseInt(value, 10);
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+}
+
+function toSessionRow(part) {
+  const arrivedAt = toTimestampMs(part.arrivedAt);
+  const eliminatedAt = toTimestampMs(part.eliminateAt);
+  const position = part.position != null ? Number(part.position) : null;
+  const placementPoints = part.placementPoints != null ? Number(part.placementPoints) : 0;
+  let lxp = 0;
+  if (arrivedAt != null && eliminatedAt != null) {
+    const diffMs = eliminatedAt - arrivedAt;
+    lxp = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60)));
+  }
+
+  return {
+    participationId: part.id,
+    playerName: part.name,
+    playerId: part.player_id,
+    studentNum: part.studentNum,
+    arrivedAt,
+    eliminatedAt,
+    position,
+    placementPoints,
+    lxp,
+    winner: position === 1
+  };
+}
+
+function fillSessionsWithParticipations(targetSessions, rawParticipations) {
+  for (const part of rawParticipations) {
+    const session = targetSessions.find(s => s.id === part.session_id);
+    if (session) {
+      session.rows.push(toSessionRow(part));
+    }
+  }
+}
+
+function mapWinnerName(list) {
+  return list.map(t => {
+    const winnerId = t.winner_id != null ? parseInt(t.winner_id, 10) : null;
+    if (!winnerId) return { ...t, winner: null };
+    const winner = players.find(p => Number(p.id) === winnerId);
+    return { ...t, winner: winner ? winner.name : null };
+  });
+}
+
+async function initializeFromAPI() {
+  console.log('Initialisation des donnees depuis l API...');
+
+  try {
+    players = await PokerAPI.getAllPlayers();
+
+    const rawSessions = await PokerAPI.getAllSessions();
+    sessions = rawSessions.map(s => ({ ...s, rows: [] }));
+
+    const rawParticipations = await PokerAPI.getAllParticipations();
+    fillSessionsWithParticipations(sessions, rawParticipations);
+
+    const rawTournaments = await PokerAPI.getAllTournaments();
+    tournaments = mapWinnerName(rawTournaments);
+
+    const rawArchivedTournaments = await PokerAPI.getAllTournaments('archived');
+    archivedTournaments = mapWinnerName(rawArchivedTournaments ?? []);
+
+    const rawArchivedSessions = await PokerAPI.getAllSessions('archived');
+    archivedSessions = (rawArchivedSessions ?? []).map(s => ({ ...s, rows: [] }));
+    fillSessionsWithParticipations(archivedSessions, rawParticipations);
+  } catch (error) {
+    console.error('Erreur lors du chargement des donnees:', error);
+  }
+}
+
+async function createPlayerAPI(name, studentNum = null) {
+  try {
+    const result = await PokerAPI.createPlayer(name, studentNum);
+    if (result.error) return null;
+
+    const newPlayer = { id: result.id, name, studentNum };
+    players.push(newPlayer);
+    return newPlayer;
+  } catch (error) {
+    console.error('Erreur createPlayerAPI:', error);
+    return null;
+  }
+}
+
+async function createSessionAPI(date) {
+  try {
+    const result = await PokerAPI.createSession(date, 'created');
+    if (result.error) return null;
+
+    const newSession = {
+      id: result.id,
+      date,
+      status: 'created',
+      createdAt: Date.now(),
+      rows: []
+    };
+
+    sessions.push(newSession);
+    return newSession;
+  } catch (error) {
+    console.error('Erreur createSessionAPI:', error);
+    return null;
+  }
+}
+
+async function addPlayerToSessionAPI(sessionId, playerId, arrivedAt = null) {
+  try {
+    const timestamp = arrivedAt || Date.now();
+    const result = await PokerAPI.addPlayerToSession(sessionId, playerId, timestamp);
+    if (result.error) return null;
+
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      const player = players.find(p => Number(p.id) === Number(playerId));
+      session.rows.push({
+        rowId: result.id,
+        playerName: player?.name || 'Inconnu',
+        status: 'active',
+        arrivedAt: timestamp,
+        eliminatedAt: null,
+        lxp: 0,
+        position: null,
+        placementPoints: 0,
+        totalPoints: 0,
+        playerId
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Erreur addPlayerToSessionAPI:', error);
+    return null;
+  }
+}
+
+async function closeSessionAPI(sessionId) {
+  try {
+    const result = await PokerAPI.updateSessionStatus(sessionId, 'closed');
+    if (result.error) return null;
+
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) session.status = 'closed';
+    return result;
+  } catch (error) {
+    console.error('Erreur closeSessionAPI:', error);
+    return null;
+  }
+}
+
+async function updateParticipationAPI(rowId, eliminatedAt, position, placementPoints) {
+  try {
+    const result = await PokerAPI.updateParticipation(rowId, eliminatedAt, position, placementPoints);
+    return result.error ? null : result;
+  } catch (error) {
+    console.error('Erreur updateParticipationAPI:', error);
+    return null;
+  }
+}
+
+async function createTournamentAPI(name, winnerId, date) {
+  try {
+    const result = await PokerAPI.createTournament(name, winnerId, date);
+    if (result.error) return null;
+
+    const winner = players.find(p => Number(p.id) === Number(winnerId));
+    const newTournament = {
+      id: result.id,
+      name,
+      winner: winner?.name || 'Inconnu',
+      date,
+      createdAt: Date.now()
+    };
+
+    tournaments.push(newTournament);
+    return newTournament;
+  } catch (error) {
+    console.error('Erreur createTournamentAPI:', error);
+    return null;
+  }
+}
+
+async function getRankingAPI() {
+  try {
+    return await PokerAPI.getRanking();
+  } catch (error) {
+    console.error('Erreur getRankingAPI:', error);
+    return [];
+  }
+}
+
+/* =========================
    Utils
 ========================= */
 
@@ -94,11 +520,8 @@ function showConfirmation(message) {
 }
 
 /* =========================
-   State (définies dans sync.js)
+  State
 ========================= */
-
-// Les variables players, sessions, tournaments, etc. sont maintenant
-// déclarées et gérées dans sync.js avec l'API
 
 let rankingExpanded = false;
 
@@ -119,7 +542,7 @@ let rankingExpanded = false;
  *     }
  *   ]
  * }
- * (liveSession est déclaré dans sync.js)
+ * (liveSession est declare dans ce fichier)
  */
 
 /* =========================
