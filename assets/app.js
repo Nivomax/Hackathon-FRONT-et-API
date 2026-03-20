@@ -981,8 +981,9 @@ function renderArchives() {
       btn.className = "btn btn--secondary";
       btn.textContent = "Restaurer";
       btn.style.whiteSpace = "nowrap";
-      btn.addEventListener("click", () => {
-        if (confirm("Restaurer ce tournoi ?")) {
+      btn.addEventListener("click", async () => {
+        const confirmed = await showConfirmation("Restaurer ce tournoi ?");
+        if (confirmed) {
           restoreTournament(t.id);
         }
       });
