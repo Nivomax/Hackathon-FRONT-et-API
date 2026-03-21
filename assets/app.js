@@ -212,6 +212,52 @@ class PokerAPI {
       return [];
     }
   }
+
+  static async closeSemester(payload) {
+    try {
+      const response = await fetch(buildApiUrl('semesters', { action: 'close' }), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload ?? {})
+      });
+      const raw = await response.text();
+      let data = null;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { error: raw || `Erreur HTTP ${response.status}` };
+      }
+
+      if (!response.ok) {
+        return { error: data?.error || `Erreur HTTP ${response.status}` };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erreur closeSemester:', error);
+      return { error: error.message };
+    }
+  }
+
+  static async getSemesters() {
+    try {
+      const response = await fetch(buildApiUrl('semesters', { action: 'all' }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getSemesters:', error);
+      return [];
+    }
+  }
+
+  static async getSemesterDetail(semesterId) {
+    try {
+      const response = await fetch(buildApiUrl('semesters', { action: 'detail', id: semesterId }));
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur getSemesterDetail:', error);
+      return { error: error.message };
+    }
+  }
 }
 
 window.PokerAPI = PokerAPI;
@@ -485,17 +531,13 @@ function showConfirmation(message) {
     
     msgEl.textContent = message;
     const handleConfirm = () => {
-      confirmBtn.removeEventListener("click", handleConfirm);
-      modal.close();
-      resolve(true);
+      modal.close("confirm");
     };
     
     confirmBtn.addEventListener("click", handleConfirm);
     modal.addEventListener("close", () => {
       confirmBtn.removeEventListener("click", handleConfirm);
-      if (modal.returnValue !== "confirm") {
-        resolve(false);
-      }
+      resolve(modal.returnValue === "confirm");
     }, { once: true });
     
     modal.showModal();
@@ -505,6 +547,7 @@ function showConfirmation(message) {
 
 
 let rankingExpanded = false;
+let isClosingSemester = false;
 
 
 
@@ -557,6 +600,14 @@ const tournamentsGrid = document.getElementById("tournamentsGrid");
 const btnViewArchives = document.getElementById("btnViewArchives");
 const archivesModal = document.getElementById("archivesModal");
 const archivesContent = document.getElementById("archivesContent");
+const btnCloseSemester = document.getElementById("btnCloseSemester");
+const btnSemesterHistory = document.getElementById("btnSemesterHistory");
+const semesterHistoryModal = document.getElementById("semesterHistoryModal");
+const semesterHistoryGrid = document.getElementById("semesterHistoryGrid");
+const semesterDetailTitle = document.getElementById("semesterDetailTitle");
+const semesterRankingBody = document.getElementById("semesterRankingBody");
+const semesterSessionsGrid = document.getElementById("semesterSessionsGrid");
+const semesterTournamentsGrid = document.getElementById("semesterTournamentsGrid");
 
 
 
@@ -575,9 +626,6 @@ function computePlacementPointsByPlayer() {
       map.set(t.winner, cur + 250);
     }
   }
-  for (const p of players) {
-    if (!map.has(p.name)) map.set(p.name, 0);
-  }
   return map;
 }
 
@@ -590,9 +638,6 @@ function computeLXPPointsByPlayer() {
       map.set(r.playerName, cur + lxp);
     }
   }
-  for (const p of players) {
-    if (!map.has(p.name)) map.set(p.name, 0);
-  }
   return map;
 }
 
@@ -604,7 +649,7 @@ function renderRanking() {
     playerName,
     placementPoints,
     lxpPoints: lxpTotals.get(playerName) ?? 0,
-  }));
+  })).filter((row) => Number(row.placementPoints) > 0);
 
   list.sort((a, b) => b.placementPoints - a.placementPoints || a.playerName.localeCompare(b.playerName, "fr"));
 
@@ -1000,6 +1045,242 @@ function renderArchives() {
   archivesContent.appendChild(mainContainer);
 }
 
+function buildCurrentRankingSnapshot() {
+  const placementTotals = computePlacementPointsByPlayer();
+  const lxpTotals = computeLXPPointsByPlayer();
+
+  const list = Array.from(placementTotals.entries()).map(([playerName, placementPoints]) => ({
+    playerName,
+    placementPoints,
+    lxpPoints: lxpTotals.get(playerName) ?? 0,
+  })).filter((row) => Number(row.placementPoints) > 0);
+
+  list.sort((a, b) => b.placementPoints - a.placementPoints || a.playerName.localeCompare(b.playerName, "fr"));
+  return list.map((row, index) => ({ ...row, position: index + 1 }));
+}
+
+function resetCurrentSemesterState() {
+  sessions = [];
+  tournaments = [];
+  archivedSessions = [];
+  archivedTournaments = [];
+  liveSession = null;
+  liveSessionSection.classList.add("hidden");
+  liveSessionBody.innerHTML = "";
+}
+
+async function closeSemester() {
+  if (isClosingSemester) return;
+
+  isClosingSemester = true;
+  btnCloseSemester.disabled = true;
+
+  try {
+  if (liveSession) {
+    alert("Ferme d'abord la séance en cours avant de clôturer le semestre.");
+    return;
+  }
+
+  const confirmed1 = await showConfirmation("Clôturer le semestre ? Cette action va réinitialiser les points et vider l'historique actif.");
+  if (!confirmed1) return;
+
+  const confirmed2 = await showConfirmation("Confirmation finale: clôturer le semestre maintenant ?");
+  if (!confirmed2) return;
+
+  let semesterName = "";
+  while (!semesterName) {
+    const inputName = window.prompt("Nom du semestre à clôturer", `Semestre ${new Date().getFullYear()}`);
+    if (inputName === null) return;
+    semesterName = String(inputName).trim();
+    if (!semesterName) {
+      alert("Le nom du semestre est obligatoire.");
+    }
+  }
+
+  const rankingSnapshot = buildCurrentRankingSnapshot();
+  const result = await PokerAPI.closeSemester({ name: semesterName, ranking: rankingSnapshot });
+
+  if (!result || result.error || !result.success) {
+    alert(result?.error ? `Erreur lors de la clôture du semestre: ${result.error}` : "Erreur lors de la clôture du semestre.");
+    return;
+  }
+
+  resetCurrentSemesterState();
+  await initializeFromAPI();
+  renderRanking();
+  renderSessionsGrid();
+  renderTournamentsGrid();
+  renderArchives();
+  alert(`Semestre : ${result.name ?? semesterName}`);
+  } finally {
+    isClosingSemester = false;
+    btnCloseSemester.disabled = false;
+  }
+}
+
+function openSemesterSessionDetail(session, participations) {
+  if (!session) return;
+
+  const rows = participations
+    .filter((p) => Number(p.session_id) === Number(session.id))
+    .map((p) => {
+      const arrivedAt = toTimestampMs(p.arrivedAt);
+      const eliminatedAt = toTimestampMs(p.eliminateAt);
+      const position = p.position != null ? Number(p.position) : null;
+      const placementPoints = p.placementPoints != null ? Number(p.placementPoints) : 0;
+      return {
+        playerName: p.name ?? "Inconnu",
+        arrivedAt,
+        eliminatedAt,
+        lxp: arrivedAt != null && eliminatedAt != null ? computeLXP(arrivedAt, eliminatedAt) : 0,
+        position,
+        placementPoints,
+        winner: position === 1
+      };
+    })
+    .sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+
+  detailDate.textContent = `${formatDateISOToFR(session.date)}`;
+  detailCount.textContent = `${rows.length}`;
+  detailBody.innerHTML = "";
+
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(r.playerName)}</strong> ${r.winner ? `<span class="rowTag tag--winner">Gagnant</span>` : ""}</td>
+      <td>${formatTime(r.arrivedAt)}</td>
+      <td>${r.eliminatedAt ? formatTime(r.eliminatedAt) : "—"}</td>
+      <td class="points">${r.lxp ?? 0}</td>
+      <td class="points">${r.position ?? "—"}</td>
+      <td class="points">${r.placementPoints ?? 0}</td>
+    `;
+    detailBody.appendChild(tr);
+  }
+
+  detailModal.showModal();
+}
+
+function renderSemesterDetailPayload(detail) {
+  const snapshot = detail?.snapshot ?? {};
+  const ranking = (Array.isArray(snapshot.ranking) ? snapshot.ranking : []).filter(
+    (row) => Number(row?.placementPoints ?? 0) > 0
+  );
+  const sessionsSnapshot = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+  const participations = Array.isArray(snapshot.participations) ? snapshot.participations : [];
+  const tournamentsSnapshot = Array.isArray(snapshot.tournaments) ? snapshot.tournaments : [];
+
+  semesterDetailTitle.textContent = `${detail.name} • ${formatDateTime(Date.parse(detail.closedAt))}`;
+
+  semesterRankingBody.innerHTML = "";
+  if (ranking.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="4" class="muted">Aucun classement enregistré</td>`;
+    semesterRankingBody.appendChild(tr);
+  } else {
+    ranking.forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="rankPos">${row.position ?? idx + 1}</td>
+        <td class="points">${row.placementPoints ?? 0}</td>
+        <td class="points">${row.lxpPoints ?? 0}</td>
+        <td class="playerName">${escapeHTML(row.playerName ?? "")}</td>
+      `;
+      semesterRankingBody.appendChild(tr);
+    });
+  }
+
+  semesterSessionsGrid.innerHTML = "";
+  if (sessionsSnapshot.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.style.padding = "0 18px 18px";
+    empty.textContent = "Aucune séance enregistrée.";
+    semesterSessionsGrid.appendChild(empty);
+  } else {
+    const sortedSessions = [...sessionsSnapshot].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    for (const s of sortedSessions) {
+      const related = participations.filter(p => Number(p.session_id) === Number(s.id));
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "sessionCard";
+      card.innerHTML = `
+        <div class="sessionCard__date">${formatDateISOToFR(s.date)}</div>
+        <div class="sessionCard__sub">${related.length} participant(s)</div>
+      `;
+      card.addEventListener("click", () => {
+        openSemesterSessionDetail(s, participations);
+      });
+      semesterSessionsGrid.appendChild(card);
+    }
+  }
+
+  semesterTournamentsGrid.innerHTML = "";
+  if (tournamentsSnapshot.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.style.padding = "0 18px 18px";
+    empty.textContent = "Aucun tournoi enregistré.";
+    semesterTournamentsGrid.appendChild(empty);
+  } else {
+    const sortedTournaments = [...tournamentsSnapshot].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    for (const t of sortedTournaments) {
+      const card = document.createElement("div");
+      card.className = "sessionCard";
+      card.style.cursor = "default";
+      card.innerHTML = `
+        <div class="sessionCard__date">${formatDateISOToFR(t.date)}</div>
+        <div class="sessionCard__sub">${escapeHTML(t.winner_name ?? "Inconnu")}</div>
+      `;
+      semesterTournamentsGrid.appendChild(card);
+    }
+  }
+}
+
+function clearSemesterDetail() {
+  semesterDetailTitle.textContent = "Sélectionne un semestre";
+  semesterRankingBody.innerHTML = "";
+  semesterSessionsGrid.innerHTML = "";
+  semesterTournamentsGrid.innerHTML = "";
+}
+
+async function openSemesterHistory() {
+  const semesters = await PokerAPI.getSemesters();
+  semesterHistoryGrid.innerHTML = "";
+  clearSemesterDetail();
+
+  if (!Array.isArray(semesters) || semesters.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.style.padding = "0 18px 18px";
+    empty.textContent = "Aucun semestre clôturé.";
+    semesterHistoryGrid.appendChild(empty);
+    semesterHistoryModal.showModal();
+    return;
+  }
+
+  semesters.forEach((semester) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "sessionCard";
+    card.style.width = "calc(100% - 24px)";
+    card.style.margin = "12px";
+    card.innerHTML = `
+      <div class="sessionCard__date">${escapeHTML(semester.name)}</div>
+    `;
+    card.addEventListener("click", async () => {
+      const detail = await PokerAPI.getSemesterDetail(semester.id);
+      if (!detail || detail.error) {
+        alert("Impossible de charger ce semestre.");
+        return;
+      }
+      renderSemesterDetailPayload(detail);
+    });
+    semesterHistoryGrid.appendChild(card);
+  });
+
+  semesterHistoryModal.showModal();
+}
+
 
 
 function startLiveSession(dateISO) {
@@ -1383,6 +1664,14 @@ tournamentModal.addEventListener("close", () => {
 btnViewArchives.addEventListener("click", () => {
   renderArchives();
   archivesModal.showModal();
+});
+
+btnCloseSemester.addEventListener("click", async () => {
+  await closeSemester();
+});
+
+btnSemesterHistory.addEventListener("click", async () => {
+  await openSemesterHistory();
 });
 
 

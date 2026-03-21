@@ -9,7 +9,7 @@ if (!$endpoint) {
     http_response_code(404);
     echo json_encode([
         'error' => 'Endpoint non trouve',
-        'available' => ['players', 'sessions', 'session_participations', 'tournaments', 'ranking', 'users'],
+        'available' => ['players', 'sessions', 'session_participations', 'tournaments', 'ranking', 'users', 'semesters'],
     ]);
     $conn->close();
     exit;
@@ -33,6 +33,9 @@ switch ($endpoint) {
         break;
     case 'users':
         handleUsers($conn, $method, $action);
+        break;
+    case 'semesters':
+        handleSemesters($conn, $method, $action);
         break;
     default:
         http_response_code(404);
@@ -787,6 +790,222 @@ function handleUsers($conn, $method, $action) {
         echo json_encode($user);
         $stmt->close();
         return;
+    }
+
+    http_response_code(405);
+    echo json_encode(['error' => 'Methode non supportee']);
+}
+
+function ensureSemestersTable($conn) {
+    $sql = "CREATE TABLE IF NOT EXISTS semesters (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        name VARCHAR(190) NOT NULL,
+        closedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        totalSessions INT NOT NULL DEFAULT 0,
+        totalTournaments INT NOT NULL DEFAULT 0,
+        snapshot_json LONGTEXT NOT NULL,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+    return $conn->query($sql);
+}
+
+function fetchAllRows($conn, $sql) {
+    $result = $conn->query($sql);
+    if (!$result) {
+        return [false, $conn->error];
+    }
+
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    return [$rows, null];
+}
+
+function handleSemesters($conn, $method, $action) {
+    if (!ensureSemestersTable($conn)) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Creation table semesters impossible: ' . $conn->error]);
+        return;
+    }
+
+    if ($method === 'GET') {
+        if ($action === 'all' || !$action) {
+            $sql = 'SELECT id, name, closedAt, totalSessions, totalTournaments FROM semesters ORDER BY id DESC';
+            $result = $conn->query($sql);
+            if (!$result) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Erreur SQL: ' . $conn->error]);
+                return;
+            }
+
+            $semesters = [];
+            while ($row = $result->fetch_assoc()) {
+                $semesters[] = $row;
+            }
+
+            echo json_encode($semesters);
+            return;
+        }
+
+        if ($action === 'detail') {
+            $id = $_GET['id'] ?? null;
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'ID semestre manquant']);
+                return;
+            }
+
+            $stmt = $conn->prepare('SELECT id, name, closedAt, snapshot_json FROM semesters WHERE id = ?');
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows === 0) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Semestre non trouve']);
+                $stmt->close();
+                return;
+            }
+
+            $row = $result->fetch_assoc();
+            $stmt->close();
+
+            $snapshot = json_decode($row['snapshot_json'], true);
+            if (!is_array($snapshot)) {
+                $snapshot = [];
+            }
+
+            echo json_encode([
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'closedAt' => $row['closedAt'],
+                'snapshot' => $snapshot,
+            ]);
+            return;
+        }
+    }
+
+    if ($method === 'POST' && $action === 'close') {
+        $data = readJsonBody();
+        $clientRanking = $data['ranking'] ?? [];
+
+        [$players, $playersErr] = fetchAllRows($conn, 'SELECT id, name, studentNum FROM players ORDER BY name ASC');
+        if ($playersErr) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Erreur players: ' . $playersErr]);
+            return;
+        }
+
+        [$sessions, $sessionsErr] = fetchAllRows($conn, 'SELECT id, date, status, isArchived, createdAt FROM sessions ORDER BY date DESC, createdAt DESC');
+        if ($sessionsErr) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Erreur sessions: ' . $sessionsErr]);
+            return;
+        }
+
+        [$participations, $partsErr] = fetchAllRows(
+            $conn,
+            "SELECT sp.id, sp.session_id, sp.player_id, p.name, p.studentNum,
+                    sp.arrivedAt, sp.eliminateAt, sp.position, sp.placementPoints
+             FROM session_participations sp
+             LEFT JOIN players p ON p.id = sp.player_id
+             ORDER BY sp.session_id, sp.position ASC"
+        );
+        if ($partsErr) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Erreur participations: ' . $partsErr]);
+            return;
+        }
+
+        [$tournaments, $tourErr] = fetchAllRows(
+            $conn,
+              "SELECT t.id, t.name, t.winner_id, p.name AS winner_name, t.date, t.isArchived
+             FROM tournaments t
+             LEFT JOIN players p ON p.id = t.winner_id
+               ORDER BY t.date DESC, t.id DESC"
+        );
+        if ($tourErr) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Erreur tournois: ' . $tourErr]);
+            return;
+        }
+
+        if (count($sessions) === 0 && count($participations) === 0 && count($tournaments) === 0) {
+            http_response_code(409);
+            echo json_encode(['error' => 'Aucune donnee active a cloturer']);
+            return;
+        }
+
+        $snapshot = [
+            'players' => $players,
+            'ranking' => is_array($clientRanking) ? $clientRanking : [],
+            'sessions' => $sessions,
+            'participations' => $participations,
+            'tournaments' => $tournaments,
+            'closedAt' => date('c'),
+        ];
+
+        $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE);
+        if ($snapshotJson === false) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Erreur encodage snapshot']);
+            return;
+        }
+
+        $semesterName = trim((string)($data['name'] ?? ''));
+        if ($semesterName === '') {
+            $result = $conn->query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM semesters');
+            $nextId = 1;
+            if ($result) {
+                $row = $result->fetch_assoc();
+                $nextId = (int)($row['next_id'] ?? 1);
+            }
+            $semesterName = 'Semestre ' . $nextId;
+        }
+
+        $conn->begin_transaction();
+        try {
+            $insert = $conn->prepare('INSERT INTO semesters (name, totalSessions, totalTournaments, snapshot_json) VALUES (?, ?, ?, ?)');
+            $totalSessions = count($sessions);
+            $totalTournaments = count($tournaments);
+            $insert->bind_param('siis', $semesterName, $totalSessions, $totalTournaments, $snapshotJson);
+
+            if (!$insert->execute()) {
+                throw new Exception($insert->error);
+            }
+
+            $semesterId = $insert->insert_id;
+            $insert->close();
+
+            if (!$conn->query('DELETE FROM session_participations')) {
+                throw new Exception($conn->error);
+            }
+
+            if (!$conn->query('DELETE FROM sessions')) {
+                throw new Exception($conn->error);
+            }
+
+            if (!$conn->query('DELETE FROM tournaments')) {
+                throw new Exception($conn->error);
+            }
+
+            $conn->commit();
+            echo json_encode([
+                'success' => true,
+                'id' => $semesterId,
+                'name' => $semesterName,
+                'message' => 'Semestre cloture avec succes',
+            ]);
+            return;
+        } catch (Exception $e) {
+            $conn->rollback();
+            http_response_code(500);
+            echo json_encode(['error' => 'Cloture semestre impossible: ' . $e->getMessage()]);
+            return;
+        }
     }
 
     http_response_code(405);

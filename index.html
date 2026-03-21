@@ -30,6 +30,8 @@
       <button id="btnWinnerTournament" class="btn btn--secondary" type="button">Gagnant tournoi</button>
       <button id="btnAddPlayer" class="btn btn--secondary" type="button">Ajouter un membre</button>
       <button id="btnViewArchives" class="btn btn--secondary" type="button">Séances & tournois supprimés</button>
+      <button id="btnCloseSemester" class="btn btn--secondary" type="button">Clôturer semestre</button>
+      <button id="btnSemesterHistory" class="btn btn--secondary" type="button">Historique semestre</button>
     </section>
 
     
@@ -281,6 +283,61 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="semesterHistoryModal" class="modal" style="width: 80em;">
+    <form method="dialog" class="modal__card modal__card--wide" style="padding: 16px;">
+      <div class="modal__head" style="align-items: center;">
+        <div>
+          <div class="modal__title">Historique des semestres</div>
+        </div>
+        <button class="iconBtn" value="close" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="layoutTwoColumns" style="grid-template-columns: 320px 1fr; gap: 16px;">
+          <section class="card" style="margin: 0; min-height: 460px;">
+            <div id="semesterHistoryGrid" class="sessionsList"></div>
+          </section>
+
+          <section class="card" style="margin: 0; min-height: 460px;">
+            <div class="card__head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <h2 class="h2" id="semesterDetailTitle">Sélectionne un semestre</h2>
+            </div>
+
+            <div class="tableWrap">
+              <table class="table" aria-label="Classement du semestre">
+                <thead>
+                  <tr>
+                    <th style="width:120px">Position</th>
+                    <th style="width:120px">Points</th>
+                    <th style="width:100px">LXP</th>
+                    <th>Membre</th>
+                  </tr>
+                </thead>
+                <tbody id="semesterRankingBody"></tbody>
+              </table>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+              <section class="card" style="margin:0;">
+                <div class="card__head">
+                  <h2 class="h2">Séances</h2>
+                </div>
+                <div id="semesterSessionsGrid" class="sessionsList"></div>
+              </section>
+
+              <section class="card" style="margin:0;">
+                <div class="card__head">
+                  <h2 class="h2">Tournois</h2>
+                </div>
+                <div id="semesterTournamentsGrid" class="sessionsList"></div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </div>
+    </form>
+  </dialog>
   
   <dialog id="confirmationModal" class="modal" style="width: 30em;">
     <form method="dialog" class="modal__card">
@@ -288,7 +345,7 @@
         <p id="confirmationMessage" style="margin: 0;"></p>
       </div>
       <div class="modal__foot">
-        <button type="button" class="btn btn--secondary" value="cancel" onclick="document.getElementById('confirmationModal').close()">Annuler</button>
+        <button type="button" class="btn btn--secondary" value="cancel" onclick="document.getElementById('confirmationModal').close('cancel')">Annuler</button>
         <button type="button" class="btn btn--primary" id="confirmationConfirmBtn" value="confirm">Confirmer</button>
       </div>
     </form>
