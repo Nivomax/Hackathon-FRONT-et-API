@@ -544,6 +544,27 @@ function showConfirmation(message) {
   });
 }
 
+function showNotice(message) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("noticeModal");
+    const msgEl = document.getElementById("noticeMessage");
+    const okBtn = document.getElementById("noticeOkBtn");
+
+    msgEl.textContent = message;
+    const handleOk = () => {
+      modal.close("ok");
+    };
+
+    okBtn.addEventListener("click", handleOk);
+    modal.addEventListener("close", () => {
+      okBtn.removeEventListener("click", handleOk);
+      resolve();
+    }, { once: true });
+
+    modal.showModal();
+  });
+}
+
 
 
 let rankingExpanded = false;
@@ -584,6 +605,8 @@ const liveSessionConfirmation = document.getElementById("liveSessionConfirmation
 const tournamentConfirmation = document.getElementById("tournamentConfirmation");
 
 const playerConfirmation = document.getElementById("playerConfirmation");
+const semesterConfirmation = document.getElementById("semesterConfirmation");
+const semesterConfirmationMessage = document.getElementById("semesterConfirmationMessage");
 
 const detailModal = document.getElementById("detailModal");
 const detailDate = document.getElementById("detailDate");
@@ -604,10 +627,15 @@ const btnCloseSemester = document.getElementById("btnCloseSemester");
 const btnSemesterHistory = document.getElementById("btnSemesterHistory");
 const semesterHistoryModal = document.getElementById("semesterHistoryModal");
 const semesterHistoryGrid = document.getElementById("semesterHistoryGrid");
+const semesterDetailPanel = document.getElementById("semesterDetailPanel");
 const semesterDetailTitle = document.getElementById("semesterDetailTitle");
 const semesterRankingBody = document.getElementById("semesterRankingBody");
 const semesterSessionsGrid = document.getElementById("semesterSessionsGrid");
 const semesterTournamentsGrid = document.getElementById("semesterTournamentsGrid");
+const semesterNameModal = document.getElementById("semesterNameModal");
+const semesterNameInput = document.getElementById("semesterNameInput");
+const semesterNameError = document.getElementById("semesterNameError");
+const confirmSemesterName = document.getElementById("confirmSemesterName");
 
 
 
@@ -649,7 +677,7 @@ function renderRanking() {
     playerName,
     placementPoints,
     lxpPoints: lxpTotals.get(playerName) ?? 0,
-  })).filter((row) => Number(row.placementPoints) > 0);
+  })).filter((row) => Number(row.lxpPoints) >= 1 || Number(row.placementPoints) >= 1);
 
   list.sort((a, b) => b.placementPoints - a.placementPoints || a.playerName.localeCompare(b.playerName, "fr"));
 
@@ -815,17 +843,17 @@ function renderTournamentsGrid() {
 
 function addTournamentWinner(winner, date) {
   if (!winner) {
-    alert("Un gagnant est obligatoire.");
+    showNotice("Un gagnant est obligatoire.");
     return;
   }
 
   if (!date) {
-    alert("Une date est obligatoire.");
+    showNotice("Une date est obligatoire.");
     return;
   }
   const winnerPlayer = players.find(p => p.name === winner);
   if (!winnerPlayer) {
-    alert("Le gagnant n'existe pas.");
+    showNotice("Le gagnant n'existe pas.");
     return;
   }
   createTournamentAPI(`Tournoi ${formatDateISOToFR(date)}`, winnerPlayer.id, date).then(result => {
@@ -1053,7 +1081,7 @@ function buildCurrentRankingSnapshot() {
     playerName,
     placementPoints,
     lxpPoints: lxpTotals.get(playerName) ?? 0,
-  })).filter((row) => Number(row.placementPoints) > 0);
+  })).filter((row) => Number(row.lxpPoints) >= 1 || Number(row.placementPoints) >= 1);
 
   list.sort((a, b) => b.placementPoints - a.placementPoints || a.playerName.localeCompare(b.playerName, "fr"));
   return list.map((row, index) => ({ ...row, position: index + 1 }));
@@ -1069,6 +1097,38 @@ function resetCurrentSemesterState() {
   liveSessionBody.innerHTML = "";
 }
 
+function askSemesterName() {
+  return new Promise((resolve) => {
+    const defaultName = `Semestre ${new Date().getFullYear()}`;
+    semesterNameInput.value = defaultName;
+    semesterNameError.style.display = "none";
+
+    const handleConfirm = () => {
+      const name = String(semesterNameInput.value ?? "").trim();
+      if (!name) {
+        semesterNameError.style.display = "block";
+        semesterNameInput.focus();
+        return;
+      }
+      semesterNameModal.close("ok");
+    };
+
+    confirmSemesterName.addEventListener("click", handleConfirm);
+    semesterNameModal.addEventListener("close", () => {
+      confirmSemesterName.removeEventListener("click", handleConfirm);
+      if (semesterNameModal.returnValue === "ok") {
+        resolve(String(semesterNameInput.value ?? "").trim());
+      } else {
+        resolve(null);
+      }
+    }, { once: true });
+
+    semesterNameModal.showModal();
+    semesterNameInput.focus();
+    semesterNameInput.select();
+  });
+}
+
 async function closeSemester() {
   if (isClosingSemester) return;
 
@@ -1077,7 +1137,7 @@ async function closeSemester() {
 
   try {
   if (liveSession) {
-    alert("Ferme d'abord la séance en cours avant de clôturer le semestre.");
+    await showNotice("Ferme d'abord la séance en cours avant de clôturer le semestre.");
     return;
   }
 
@@ -1087,21 +1147,14 @@ async function closeSemester() {
   const confirmed2 = await showConfirmation("Confirmation finale: clôturer le semestre maintenant ?");
   if (!confirmed2) return;
 
-  let semesterName = "";
-  while (!semesterName) {
-    const inputName = window.prompt("Nom du semestre à clôturer", `Semestre ${new Date().getFullYear()}`);
-    if (inputName === null) return;
-    semesterName = String(inputName).trim();
-    if (!semesterName) {
-      alert("Le nom du semestre est obligatoire.");
-    }
-  }
+  const semesterName = await askSemesterName();
+  if (!semesterName) return;
 
   const rankingSnapshot = buildCurrentRankingSnapshot();
   const result = await PokerAPI.closeSemester({ name: semesterName, ranking: rankingSnapshot });
 
   if (!result || result.error || !result.success) {
-    alert(result?.error ? `Erreur lors de la clôture du semestre: ${result.error}` : "Erreur lors de la clôture du semestre.");
+    await showNotice(result?.error ? `Erreur lors de la clôture du semestre: ${result.error}` : "Erreur lors de la clôture du semestre.");
     return;
   }
 
@@ -1111,7 +1164,11 @@ async function closeSemester() {
   renderSessionsGrid();
   renderTournamentsGrid();
   renderArchives();
-  alert(`Semestre : ${result.name ?? semesterName}`);
+  semesterConfirmationMessage.textContent = `Semestre clôturé et enregistré : ${result.name ?? semesterName}`;
+  semesterConfirmation.showModal();
+  setTimeout(() => {
+    semesterConfirmation.close();
+  }, 2500);
   } finally {
     isClosingSemester = false;
     btnCloseSemester.disabled = false;
@@ -1161,15 +1218,21 @@ function openSemesterSessionDetail(session, participations) {
 }
 
 function renderSemesterDetailPayload(detail) {
+  semesterDetailPanel.classList.remove("hidden");
+
   const snapshot = detail?.snapshot ?? {};
   const ranking = (Array.isArray(snapshot.ranking) ? snapshot.ranking : []).filter(
-    (row) => Number(row?.placementPoints ?? 0) > 0
+    (row) => Number(row?.lxpPoints ?? 0) >= 1 || Number(row?.placementPoints ?? 0) >= 1
   );
-  const sessionsSnapshot = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+  const sessionsSnapshot = (Array.isArray(snapshot.sessions) ? snapshot.sessions : []).filter(
+    (s) => Number(s?.isArchived ?? 0) !== 1
+  );
   const participations = Array.isArray(snapshot.participations) ? snapshot.participations : [];
-  const tournamentsSnapshot = Array.isArray(snapshot.tournaments) ? snapshot.tournaments : [];
+  const tournamentsSnapshot = (Array.isArray(snapshot.tournaments) ? snapshot.tournaments : []).filter(
+    (t) => Number(t?.isArchived ?? 0) !== 1
+  );
 
-  semesterDetailTitle.textContent = `${detail.name} • ${formatDateTime(Date.parse(detail.closedAt))}`;
+  semesterDetailTitle.textContent = `${detail.name}`;
 
   semesterRankingBody.innerHTML = "";
   if (ranking.length === 0) {
@@ -1237,6 +1300,7 @@ function renderSemesterDetailPayload(detail) {
 }
 
 function clearSemesterDetail() {
+  semesterDetailPanel.classList.add("hidden");
   semesterDetailTitle.textContent = "Sélectionne un semestre";
   semesterRankingBody.innerHTML = "";
   semesterSessionsGrid.innerHTML = "";
@@ -1270,7 +1334,7 @@ async function openSemesterHistory() {
     card.addEventListener("click", async () => {
       const detail = await PokerAPI.getSemesterDetail(semester.id);
       if (!detail || detail.error) {
-        alert("Impossible de charger ce semestre.");
+        await showNotice("Impossible de charger ce semestre.");
         return;
       }
       renderSemesterDetailPayload(detail);
@@ -1325,11 +1389,20 @@ function validateRow(rowId, playerName) {
   if (!liveSession) return;
 
   const name = (playerName ?? "").trim();
-  if (!name) return alert("Choisis un membre.");
+  if (!name) {
+    showNotice("Choisis un membre.");
+    return;
+  }
   const already = liveSession.rows.some(r => r.rowId !== rowId && r.playerName === name && r.status !== "draft");
-  if (already) return alert("Ce membre est déjà présent dans la séance.");
+  if (already) {
+    showNotice("Ce membre est déjà présent dans la séance.");
+    return;
+  }
   const player = players.find(p => p.name === name);
-  if (!player) return alert("Ce membre n'existe pas.");
+  if (!player) {
+    showNotice("Ce membre n'existe pas.");
+    return;
+  }
 
   const row = liveSession.rows.find(r => r.rowId === rowId);
   if (!row) return;
@@ -1366,7 +1439,8 @@ function markWinner(rowId) {
   if (!liveSession) return;
   for (const r of liveSession.rows) {
     if (r.status === "winner") {
-      return alert("Le gagnant est déjà défini.");
+      showNotice("Le gagnant est déjà défini.");
+      return;
     }
   }
 
@@ -1408,7 +1482,8 @@ function closeSession() {
   if (!liveSession) return;
 
   if (!canCloseSession()) {
-    return alert("La séance n'est pas terminée : il faut un gagnant et tous les autres éliminés.");
+    showNotice("La séance n'est pas terminée : il faut un gagnant et tous les autres éliminés.");
+    return;
   }
   const updatePromises = [];
   for (const r of liveSession.rows) {
@@ -1438,7 +1513,7 @@ function closeSession() {
     }
   }).catch(error => {
     console.error('❌ Erreur lors de la clôture:', error);
-    alert('Erreur lors de la clôture de la séance.');
+    showNotice('Erreur lors de la clôture de la séance.');
   });
 }
 
@@ -1618,19 +1693,19 @@ confirmAddPlayer.addEventListener("click", async (e) => {
   const lastName = (playerLastName.value ?? "").trim();
   
   if (!firstName || !lastName) {
-    alert("Prénom et nom sont obligatoires.");
+    await showNotice("Prénom et nom sont obligatoires.");
     return;
   }
   
   const fullName = `${firstName} ${lastName}`;
   if (players.some(p => p.name === fullName)) {
-    alert("Ce membre existe déjà.");
+    await showNotice("Ce membre existe déjà.");
     return;
   }
   const result = await createPlayerAPI(fullName, null);
   
   if (!result) {
-    alert("Erreur lors de l'ajout du membre.");
+    await showNotice("Erreur lors de l'ajout du membre.");
     return;
   }
   addPlayerModal.close();

@@ -96,6 +96,14 @@
       </form>
     </dialog>
 
+    <dialog id="semesterConfirmation" class="modal" style="width: 30em;">
+      <form method="dialog" class="modal__card" style="background-color: #dcfce7; border: 2px solid #bbf7d0;">
+        <div class="modal__body">
+          <p id="semesterConfirmationMessage" style="margin: 0; text-align: center;">Semestre clôturé</p>
+        </div>
+      </form>
+    </dialog>
+
     
     <div class="layoutTwoColumns">
       
@@ -299,7 +307,7 @@
             <div id="semesterHistoryGrid" class="sessionsList"></div>
           </section>
 
-          <section class="card" style="margin: 0; min-height: 460px;">
+          <section id="semesterDetailPanel" class="card hidden" style="margin: 0; min-height: 460px;">
             <div class="card__head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
               <h2 class="h2" id="semesterDetailTitle">Sélectionne un semestre</h2>
             </div>
@@ -338,6 +346,29 @@
       </div>
     </form>
   </dialog>
+
+  <dialog id="semesterNameModal" class="modal" style="width: 30em;">
+    <form method="dialog" class="modal__card" style="padding: 16px;">
+      <div class="modal__head" style="align-items: center;">
+        <div>
+          <div class="modal__title">Nom du semestre</div>
+        </div>
+        <button class="iconBtn" value="cancel" aria-label="Fermer">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <label class="field">
+          <input id="semesterNameInput" type="text" placeholder="Semestre 2026" />
+        </label>
+        <p id="semesterNameError" class="muted" style="margin: 6px 0 0; color: #b91c1c; display: none;">Le nom du semestre est obligatoire.</p>
+      </div>
+
+      <div class="modal__foot">
+        <button class="btn btn--ghost" value="cancel" type="submit">Annuler</button>
+        <button id="confirmSemesterName" class="btn btn--primary" value="ok" type="button">Valider</button>
+      </div>
+    </form>
+  </dialog>
   
   <dialog id="confirmationModal" class="modal" style="width: 30em;">
     <form method="dialog" class="modal__card">
@@ -347,6 +378,17 @@
       <div class="modal__foot">
         <button type="button" class="btn btn--secondary" value="cancel" onclick="document.getElementById('confirmationModal').close('cancel')">Annuler</button>
         <button type="button" class="btn btn--primary" id="confirmationConfirmBtn" value="confirm">Confirmer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="noticeModal" class="modal" style="width: 30em;">
+    <form method="dialog" class="modal__card">
+      <div class="modal__body">
+        <p id="noticeMessage" style="margin: 0;"></p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn--primary" id="noticeOkBtn" value="ok">OK</button>
       </div>
     </form>
   </dialog>
