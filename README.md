@@ -1,4 +1,4 @@
-# Poker App - Frontend + API PHP
+# EFREI Poker - Frontend + API PHP
 
 Application web de gestion de seances de poker avec classement, historique, tournois et archivage.
 
@@ -17,7 +17,7 @@ Application web de gestion de seances de poker avec classement, historique, tour
 
 - Frontend: HTML, CSS, JavaScript (fichier unique)
 - Backend: PHP (API REST)
-- Base de donnees: MySQL / MariaDB
+- Base de donnees: MySQL
 - Environnement local recommande: XAMPP
 
 ## Structure du projet
